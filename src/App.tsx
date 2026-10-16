@@ -8,7 +8,7 @@ export function App() {
     if (typeof window === 'undefined') return 'customer';
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    if (path.includes('/admin') || hash.includes('#admin')) {
+    if (path.includes('/u804') || hash.includes('#u804')) {
       return 'admin';
     }
     return 'customer';
@@ -21,7 +21,7 @@ export function App() {
     const handleLocationChange = () => {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
-      if (path.includes('/admin') || hash.includes('#admin')) {
+      if (path.includes('/u804') || hash.includes('#u804')) {
         setCurrentRoute('admin');
       } else {
         setCurrentRoute('customer');
