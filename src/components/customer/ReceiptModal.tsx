@@ -82,6 +82,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               <span className="text-stone-700">Mobile:</span>
               <span className="font-semibold text-stone-800">{formatPhoneNumber(order.customerPhone)}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-stone-700">Payment method:</span>
+              <span className="font-bold text-stone-900">{order.paymentMethod === 'ONLINE' ? 'Online selected' : order.paymentMethod === 'CASH' ? 'Cash' : 'Not recorded'}</span>
+            </div>
           </div>
 
           {/* Itemized Table */}

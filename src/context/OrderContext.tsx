@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { Product, CartItem, Order, CustomerDetails } from '../types';
+import type { Product, CartItem, Order, CustomerDetails, PaymentMethod } from '../types';
 import { INITIAL_PRODUCTS } from '../data/mockProducts';
 import { calculateGrandTotal, calculateLineTotal } from '../utils/currency';
 import { generateOrderNumber, generateBillId } from '../utils/formatters';
@@ -24,7 +24,7 @@ interface OrderContextType {
   removeFromCart: (productId: string) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  placeOrder: () => Promise<Order | null>;
+  placeOrder: (paymentMethod: PaymentMethod) => Promise<Order | null>;
   acceptOrder: (orderId: string) => Promise<void>;
   completeOrder: (orderId: string) => Promise<void>;
   undoCompleteOrder: (orderId: string) => Promise<void>;
@@ -56,6 +56,7 @@ function mapOrderRow(row: Record<string, any>): Order {
     items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items,
     total: Number(row.total),
     status: row.status,
+    paymentMethod: row.payment_method || row.paymentMethod || undefined,
     createdAt: row.created_at || row.createdAt,
     completedAt: row.completed_at || row.completedAt || undefined,
   };
@@ -371,12 +372,13 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   // Place order
-  const placeOrder = useCallback(async (): Promise<Order | null> => {
+  const placeOrder = useCallback(async (paymentMethod: PaymentMethod): Promise<Order | null> => {
     if (!customerDetails || cart.length === 0) return null;
 
     const fingerprint = JSON.stringify({
       customerName: customerDetails.name.trim(),
       customerPhone: customerDetails.phone.replace(/\D/g, ''),
+      paymentMethod,
       items: cart.map(({ product, quantity }) => [product.id, quantity]),
     });
     if (pendingOrderRef.current?.fingerprint !== fingerprint) {
@@ -423,6 +425,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       customerPhone: customerDetails.phone.trim(),
       items,
       total,
+      paymentMethod,
       status: 'NEW',
       createdAt: now.toISOString(),
     };
@@ -434,6 +437,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         p_customer_name: newOrder.customerName,
         p_customer_phone: newOrder.customerPhone,
         p_items: newOrder.items.map(({ productId, quantity }) => ({ productId, quantity })),
+        p_payment_method: paymentMethod,
       });
       if (error) {
         console.error('Customer order RPC failed:', error.code);

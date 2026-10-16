@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, User, Phone, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
-import type { CartItem, CustomerDetails } from '../../types';
+import type { CartItem, CustomerDetails, PaymentMethod } from '../../types';
 import { formatINR, calculateLineTotal } from '../../utils/currency';
 import { formatPhoneNumber } from '../../utils/formatters';
 
@@ -12,7 +12,7 @@ interface OrderReviewModalProps {
   cartTotal: number;
   customerDetails: CustomerDetails;
   onEditCustomer: () => void;
-  onConfirmOrder: () => Promise<void>;
+  onConfirmOrder: (paymentMethod: PaymentMethod) => Promise<void>;
 }
 
 export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
@@ -27,6 +27,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
 
   if (!isOpen) return null;
 
@@ -37,7 +38,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
     try {
       // Simulate submission network latency (~900ms)
       await new Promise((resolve) => setTimeout(resolve, 900));
-      await onConfirmOrder();
+      await onConfirmOrder(paymentMethod);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Could not place your order. Please try again.');
     } finally {
@@ -97,6 +98,24 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
               Edit
             </button>
           </div>
+
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-bold uppercase tracking-wider text-stone-600">Payment method</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(['ONLINE', 'CASH'] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  disabled={isSubmitting}
+                  aria-pressed={paymentMethod === method}
+                  onClick={() => setPaymentMethod(method)}
+                  className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-bold transition-colors ${paymentMethod === method ? 'border-rose-600 bg-rose-50 text-rose-700 ring-1 ring-rose-600' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                >
+                  {method === 'ONLINE' ? 'Online' : 'Cash'}
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           {/* Itemized Order List */}
           <div>

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   items JSONB NOT NULL DEFAULT '[]'::jsonb,
   total NUMERIC NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'NEW',
+  payment_method TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   completed_at TIMESTAMPTZ
 );
@@ -24,8 +25,23 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_phone TEXT NOT NULL 
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'NEW';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'orders_payment_method_check'
+      AND conrelid = 'public.orders'::regclass
+  ) THEN
+    ALTER TABLE public.orders
+      ADD CONSTRAINT orders_payment_method_check
+      CHECK (payment_method IS NULL OR payment_method IN ('ONLINE', 'CASH'));
+  END IF;
+END
+$$;
 
 UPDATE public.orders
 SET customer_name = COALESCE(NULLIF(btrim(customer_name), ''), 'Customer'),
@@ -165,6 +181,11 @@ DECLARE
   item_quantity INTEGER;
   calculated_total NUMERIC := 0;
 BEGIN
+  NEW.payment_method := upper(btrim(COALESCE(NEW.payment_method, '')));
+  IF NEW.payment_method NOT IN ('ONLINE', 'CASH') THEN
+    RAISE EXCEPTION 'Choose Online or Cash as the payment method';
+  END IF;
+
   NEW.customer_name := btrim(COALESCE(NEW.customer_name, ''));
   NEW.customer_phone := regexp_replace(COALESCE(NEW.customer_phone, ''), '[^0-9]', '', 'g');
 
@@ -240,7 +261,8 @@ CREATE OR REPLACE FUNCTION public.create_customer_order(
   p_order_id TEXT,
   p_customer_name TEXT,
   p_customer_phone TEXT,
-  p_items JSONB
+  p_items JSONB,
+  p_payment_method TEXT
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -261,16 +283,16 @@ BEGIN
 
   IF id_is_uuid THEN
     INSERT INTO public.orders (
-      id, order_number, bill_id, customer_name, customer_phone, items, total, status
+      id, order_number, bill_id, customer_name, customer_phone, items, total, status, payment_method
     ) VALUES (
-      p_order_id::UUID, 'PB-PENDING', 'PB-PENDING', p_customer_name, p_customer_phone, p_items, 0, 'NEW'
+      p_order_id::UUID, 'PB-PENDING', 'PB-PENDING', p_customer_name, p_customer_phone, p_items, 0, 'NEW', p_payment_method
     ) ON CONFLICT (id) DO NOTHING
     RETURNING * INTO created_order;
   ELSE
     INSERT INTO public.orders (
-      id, order_number, bill_id, customer_name, customer_phone, items, total, status
+      id, order_number, bill_id, customer_name, customer_phone, items, total, status, payment_method
     ) VALUES (
-      p_order_id, 'PB-PENDING', 'PB-PENDING', p_customer_name, p_customer_phone, p_items, 0, 'NEW'
+      p_order_id, 'PB-PENDING', 'PB-PENDING', p_customer_name, p_customer_phone, p_items, 0, 'NEW', p_payment_method
     ) ON CONFLICT (id) DO NOTHING
     RETURNING * INTO created_order;
   END IF;
@@ -290,8 +312,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_customer_order(TEXT, TEXT, TEXT, JSONB) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.create_customer_order(TEXT, TEXT, TEXT, JSONB) TO anon, authenticated;
+DROP FUNCTION IF EXISTS public.create_customer_order(TEXT, TEXT, TEXT, JSONB);
+REVOKE ALL ON FUNCTION public.create_customer_order(TEXT, TEXT, TEXT, JSONB, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_customer_order(TEXT, TEXT, TEXT, JSONB, TEXT) TO anon, authenticated;
 
 CREATE TABLE IF NOT EXISTS private.staff_sessions (
   user_id UUID PRIMARY KEY,

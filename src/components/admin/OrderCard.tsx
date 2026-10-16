@@ -58,6 +58,9 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             <span className="text-[11px] font-mono text-stone-400 block leading-tight mt-0.5">
               {order.billId}
             </span>
+            <span className={`inline-flex mt-1 rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${order.paymentMethod === 'ONLINE' ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30' : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'}`}>
+              {order.paymentMethod === 'ONLINE' ? 'Online selected' : order.paymentMethod === 'CASH' ? 'Cash' : 'Payment not recorded'}
+            </span>
           </div>
 
           <div className="text-right">

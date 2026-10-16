@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Sparkles } from 'lucide-react';
-import type { ProductCategory } from '../types';
+import type { PaymentMethod, ProductCategory } from '../types';
 import { useOrderContext } from '../context/OrderContext';
 import { CustomerHeader } from '../components/customer/CustomerHeader';
 import { CustomerDetailsModal } from '../components/customer/CustomerDetailsModal';
@@ -96,8 +96,8 @@ export const CustomerView: React.FC<CustomerViewProps> = () => {
     setIsReviewOpen(true);
   };
 
-  const handleConfirmOrder = async () => {
-    const newOrder = await placeOrder();
+  const handleConfirmOrder = async (paymentMethod: PaymentMethod) => {
+    const newOrder = await placeOrder(paymentMethod);
     if (newOrder) {
       setIsReviewOpen(false);
     }

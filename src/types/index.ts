@@ -32,6 +32,7 @@ export interface OrderItem {
 }
 
 export type OrderStatus = 'NEW' | 'ACCEPTED' | 'COMPLETED';
+export type PaymentMethod = 'ONLINE' | 'CASH';
 
 export interface Order {
   id: string; // Internal unique ID
@@ -41,6 +42,7 @@ export interface Order {
   customerPhone: string;
   items: OrderItem[];
   total: number; // In Rupees
+  paymentMethod?: PaymentMethod;
   status: OrderStatus;
   createdAt: string; // ISO string
   completedAt?: string; // ISO string

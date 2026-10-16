@@ -27,7 +27,7 @@ test('staff PIN RPC rejects NULL and malformed PINs before creating a session', 
 test('anonymous checkout is limited to the validated SECURITY DEFINER RPC', () => {
   const checkout = functionBody(schema, 'public.create_customer_order');
   assert.match(checkout.declaration, /SECURITY DEFINER/i);
-  assert.match(schema, /GRANT EXECUTE ON FUNCTION public\.create_customer_order\(TEXT, TEXT, TEXT, JSONB\) TO anon, authenticated/i);
+  assert.match(schema, /GRANT EXECUTE ON FUNCTION public\.create_customer_order\(TEXT, TEXT, TEXT, JSONB, TEXT\) TO anon, authenticated/i);
   assert.match(schema, /REVOKE ALL ON public\.orders FROM PUBLIC, anon, authenticated/i);
   assert.doesNotMatch(schema, /GRANT INSERT ON public\.orders TO anon/i);
   assert.doesNotMatch(schema, /CREATE POLICY\s+"Customers can place new orders"/i);
@@ -40,6 +40,16 @@ test('customer order trigger prices items from private catalog and computes tota
   assert.match(trigger, /NEW\.order_number\s*:=\s*'PB-'\s*\|\|\s*nextval/i);
   assert.match(trigger, /NEW\.status\s*:=\s*'NEW'/i);
   assert.match(trigger, /Duplicate menu items are not allowed/i);
+  assert.match(trigger, /payment_method NOT IN \('ONLINE', 'CASH'\)/i);
+});
+
+test('checkout payment method is required, persisted, and returned to the customer', () => {
+  const checkout = functionBody(schema, 'public.create_customer_order');
+  assert.match(checkout.declaration, /p_payment_method TEXT/i);
+  assert.match(checkout.body, /payment_method/i);
+  assert.match(schema, /ADD COLUMN IF NOT EXISTS payment_method TEXT/i);
+  assert.match(context, /p_payment_method: paymentMethod/);
+  assert.match(context, /paymentMethod: row\.payment_method/);
 });
 
 test('staff order policies require a verified staff session', () => {
