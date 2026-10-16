@@ -6,7 +6,7 @@ A modern, mobile-first QR-based food ordering web application and staff order ma
 - **Instagram:** [@thepizzabitee](https://instagram.com/thepizzabitee)
 - **Currency:** INR (₹)
 - **Timezone:** Asia/Kolkata (IST)
-- **Architecture:** Frontend-Only MVP with local state persistence & zero required backend credentials. Future-ready for Supabase database & auth.
+- **Architecture:** React frontend with Supabase PostgreSQL and Realtime for cross-device order sync; local storage is only a same-browser fallback.
 
 ---
 
@@ -64,8 +64,9 @@ Desktop- and tablet-friendly order management dashboard for stall staff with res
 - **Completed Order History**
   - Collapsible archive displaying all completed tickets today.
   - Instant search filter by Order ID, Bill ID, customer name, or phone number.
-- **Cross-Tab Synchronization**
-  - Orders placed in a customer tab immediately pop up in the staff dashboard tab in real-time via `localStorage` event broadcasting.
+- **Order Synchronization**
+  - With Supabase configured, customer orders and staff status changes sync through PostgreSQL Realtime across devices.
+  - Without Supabase credentials, orders are stored locally and synchronize only between tabs in the same browser; they are not shared across devices.
 
 ---
 
@@ -83,7 +84,7 @@ Desktop- and tablet-friendly order management dashboard for stall staff with res
 
 ## 🚀 Getting Started Locally
 
-This MVP runs completely offline with mock data and local storage. No database or cloud credentials needed.
+The app can run locally without cloud credentials, but cross-device order synchronization requires the Supabase setup below.
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18 or higher recommended)
@@ -160,7 +161,13 @@ Pizza Bite/
 
 ---
 
-## 🔮 Future Supabase Integration
+## Supabase Setup
 
-The state architecture is abstracted inside [`OrderContext.tsx`](src/context/OrderContext.tsx):
-- Replacing `localStorage` with Supabase PostgreSQL client (`supabase.from('orders').select()`, `.insert()`, and `.update()`) and Supabase Realtime subscriptions (`supabase.channel('orders')`) requires zero structural changes to the UI components.
+Cross-device order sync requires a Supabase project. Run `supabase_schema.sql` in the project's SQL Editor, then add these frontend environment variables in `.env.local` for local development and in the hosting provider for every deployment:
+
+```env
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<publishable-anon-key>
+```
+
+Use the project's public anon/publishable key only; never put a service-role key in frontend variables. Redeploy after changing environment variables. The schema enables row-level policies and Realtime for `public.orders`, and provides a database sequence so order tokens remain unique across devices. If either credential is missing or still a template value, the app falls back to local storage and cannot synchronize separate devices.

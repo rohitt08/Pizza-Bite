@@ -24,9 +24,9 @@ interface OrderContextType {
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
   placeOrder: () => Promise<Order | null>;
-  acceptOrder: (orderId: string) => void;
-  completeOrder: (orderId: string) => void;
-  undoCompleteOrder: (orderId: string) => void;
+  acceptOrder: (orderId: string) => Promise<void>;
+  completeOrder: (orderId: string) => Promise<void>;
+  undoCompleteOrder: (orderId: string) => Promise<void>;
   deleteOrder: (orderId: string) => Promise<void>;
   dismissUndo: () => void;
   clearOrderHistory: () => Promise<void>;
@@ -43,6 +43,21 @@ const CUSTOMER_STORAGE_KEY = 'pb_customer_details_v1';
 const RUSH_MODE_STORAGE_KEY = 'pb_rush_mode_v1';
 const SOUND_STORAGE_KEY = 'pb_sound_pref_v1';
 const ORDER_COUNTER_KEY = 'pb_order_seq_counter';
+
+function mapOrderRow(row: Record<string, any>): Order {
+  return {
+    id: row.id,
+    orderNumber: row.order_number || row.orderNumber,
+    billId: row.bill_id || row.billId,
+    customerName: row.customer_name || row.customerName,
+    customerPhone: row.customer_phone || row.customerPhone,
+    items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items,
+    total: Number(row.total),
+    status: row.status,
+    createdAt: row.created_at || row.createdAt,
+    completedAt: row.completed_at || row.completedAt || undefined,
+  };
+}
 
 // Web Audio API chime synthesizer (safe in all browsers, zero external audio asset required)
 function playChime(enabled: boolean) {
@@ -170,8 +185,10 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const client = supabase;
     if (!client) return;
+    let isInitialSync = true;
+    const realtimeChanges = new Map<string, Order | null>();
 
-    // 1. Initial fetch from Supabase
+    // Load after the realtime subscription is active so changes are not missed.
     const fetchCloudOrders = async () => {
       try {
         const { data, error } = await client
@@ -179,34 +196,24 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           .select('*')
           .order('created_at', { ascending: false });
 
-          if (!error && data && data.length > 0) {
-          const parsedOrders: Order[] = data.map((row: any) => ({
-            id: row.id,
-            orderNumber: row.order_number || row.orderNumber,
-            billId: row.bill_id || row.billId,
-            customerName: row.customer_name || row.customerName,
-            customerPhone: row.customer_phone || row.customerPhone,
-            items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items,
-            total: Number(row.total),
-            status: row.status,
-            createdAt: row.created_at || row.createdAt,
-            completedAt: row.completed_at || row.completedAt || undefined,
-          }));
-          // Merge: cloud is source of truth, but keep any local-only orders not yet synced
-          setOrders((local) => {
-            const cloudIds = new Set(parsedOrders.map((o) => o.id));
-            const localOnly = local.filter((o) => !cloudIds.has(o.id));
-            return [...localOnly, ...parsedOrders];
-          });
+        if (error) throw error;
+        if (data) {
+          const snapshot = data.map((row) => mapOrderRow(row));
+          for (const [orderId, changedOrder] of realtimeChanges) {
+            const existingIndex = snapshot.findIndex((order) => order.id === orderId);
+            if (existingIndex !== -1) snapshot.splice(existingIndex, 1);
+            if (changedOrder) snapshot.unshift(changedOrder);
+          }
+          realtimeChanges.clear();
+          isInitialSync = false;
+          setOrders(snapshot);
         }
       } catch (err) {
         console.warn('Could not fetch from Supabase, using local fallback:', err);
       }
     };
 
-    fetchCloudOrders();
-
-    // 2. Realtime listener for cross-device orders
+    // Realtime listener for cross-device orders
     const channel = client
       .channel('realtime_orders_channel')
       .on(
@@ -214,19 +221,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newRow = payload.new;
-            const newOrder: Order = {
-              id: newRow.id,
-              orderNumber: newRow.order_number || newRow.orderNumber,
-              billId: newRow.bill_id || newRow.billId,
-              customerName: newRow.customer_name || newRow.customerName,
-              customerPhone: newRow.customer_phone || newRow.customerPhone,
-              items: typeof newRow.items === 'string' ? JSON.parse(newRow.items) : newRow.items,
-              total: Number(newRow.total),
-              status: newRow.status,
-              createdAt: newRow.created_at || newRow.createdAt,
-              completedAt: newRow.completed_at || newRow.completedAt || undefined,
-            };
+            const newOrder = mapOrderRow(payload.new);
+            if (isInitialSync) realtimeChanges.set(newOrder.id, newOrder);
 
             setOrders((prev) => {
               if (prev.some((o) => o.id === newOrder.id)) return prev;
@@ -236,25 +232,26 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Chime for new incoming order
             playChime(soundEnabled);
           } else if (payload.eventType === 'UPDATE') {
-            const updatedRow = payload.new;
+            const updatedOrder = mapOrderRow(payload.new);
+            if (isInitialSync) realtimeChanges.set(updatedOrder.id, updatedOrder);
             setOrders((prev) =>
               prev.map((ord) =>
-                ord.id === updatedRow.id
-                  ? {
-                      ...ord,
-                      status: updatedRow.status,
-                      completedAt: updatedRow.completed_at || updatedRow.completedAt || ord.completedAt,
-                    }
-                  : ord
+                ord.id === updatedOrder.id ? updatedOrder : ord
               )
             );
           } else if (payload.eventType === 'DELETE') {
             const deletedRow = payload.old;
+            if (isInitialSync) realtimeChanges.set(deletedRow.id, null);
             setOrders((prev) => prev.filter((ord) => ord.id !== deletedRow.id));
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void fetchCloudOrders();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Supabase realtime subscription ${status.toLowerCase()}`);
+        }
+      });
 
     return () => {
       client.removeChannel(channel);
@@ -335,18 +332,29 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const placeOrder = useCallback(async (): Promise<Order | null> => {
     if (!customerDetails || cart.length === 0) return null;
 
-    // Get current sequence counter
-    let currentSeq = 1042;
-    try {
-      const storedSeq = localStorage.getItem(ORDER_COUNTER_KEY);
-      if (storedSeq) {
-        currentSeq = parseInt(storedSeq, 10);
+    let orderNumber: string;
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('next_order_number');
+      if (error || typeof data !== 'string') {
+        throw new Error(`Could not allocate an order number: ${error?.message || 'invalid database response'}`);
       }
-    } catch {
-      // Use fallback
-    }
+      orderNumber = data;
+    } else {
+      let currentSeq = 1042;
+      try {
+        const storedSeq = localStorage.getItem(ORDER_COUNTER_KEY);
+        if (storedSeq) currentSeq = parseInt(storedSeq, 10);
+      } catch {
+        // Use fallback
+      }
 
-    const orderNumber = generateOrderNumber(currentSeq);
+      orderNumber = generateOrderNumber(currentSeq);
+      try {
+        localStorage.setItem(ORDER_COUNTER_KEY, String(currentSeq + 1));
+      } catch {
+        // Ignore
+      }
+    }
     const now = new Date();
     const billId = generateBillId(now, orderNumber);
 
@@ -374,16 +382,9 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createdAt: now.toISOString(),
     };
 
-    // Update sequence
-    try {
-      localStorage.setItem(ORDER_COUNTER_KEY, String(currentSeq + 1));
-    } catch {
-      // Ignore
-    }
-
-    // Persist to Supabase if configured
+    // Do not confirm an order until the cloud has accepted it.
     if (isSupabaseConfigured && supabase) {
-      supabase
+      const { error } = await supabase
         .from('orders')
         .insert({
           id: newOrder.id,
@@ -395,10 +396,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           total: newOrder.total,
           status: newOrder.status,
           created_at: newOrder.createdAt,
-        })
-        .then(({ error }) => {
-          if (error) console.error('Supabase order insert error:', error);
         });
+      if (error) throw new Error(`Could not sync order to the kitchen: ${error.message}`);
     }
 
     // Update orders list
@@ -413,91 +412,80 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [customerDetails, cart, soundEnabled, clearCart]);
 
   // Staff workflow actions: ONLY ACCEPT and COMPLETE
-  const acceptOrder = useCallback((orderId: string) => {
+  const acceptOrder = useCallback(async (orderId: string) => {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'ACCEPTED' })
+        .eq('id', orderId);
+      if (error) {
+        console.error('Supabase accept order error:', error);
+        return;
+      }
+    }
+
     setOrders((prev) =>
       prev.map((ord) =>
         ord.id === orderId ? { ...ord, status: 'ACCEPTED' as const } : ord
       )
     );
-
-    if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({ status: 'ACCEPTED' })
-        .eq('id', orderId)
-        .then(({ error }) => {
-          if (error) console.error('Supabase accept order error:', error);
-        });
-    }
   }, []);
 
-  const completeOrder = useCallback((orderId: string) => {
+  const completeOrder = useCallback(async (orderId: string) => {
     const completedAt = new Date().toISOString();
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'COMPLETED', completed_at: completedAt })
+        .eq('id', orderId);
+      if (error) {
+        console.error('Supabase complete order error:', error);
+        return;
+      }
+    }
+
     setOrders((prev) =>
       prev.map((ord) =>
         ord.id === orderId
-          ? {
-              ...ord,
-              status: 'COMPLETED' as const,
-              completedAt,
-            }
+          ? { ...ord, status: 'COMPLETED' as const, completedAt }
           : ord
       )
     );
     setLastCompletedOrderId(orderId);
-
-    if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({ status: 'COMPLETED', completed_at: completedAt })
-        .eq('id', orderId)
-        .then(({ error }) => {
-          if (error) console.error('Supabase complete order error:', error);
-        });
-    }
   }, []);
 
-  const undoCompleteOrder = useCallback((orderId: string) => {
+  const undoCompleteOrder = useCallback(async (orderId: string) => {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'NEW', completed_at: null })
+        .eq('id', orderId);
+      if (error) {
+        console.error('Supabase undo error:', error);
+        return;
+      }
+    }
+
     setOrders((prev) =>
       prev.map((ord) =>
         ord.id === orderId
-          ? {
-              ...ord,
-              status: 'NEW' as const,
-              completedAt: undefined,
-            }
+          ? { ...ord, status: 'NEW' as const, completedAt: undefined }
           : ord
       )
     );
     setLastCompletedOrderId(null);
-
-    if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({ status: 'NEW', completed_at: null })
-        .eq('id', orderId)
-        .then(({ error }) => {
-          if (error) console.error('Supabase undo error:', error);
-        });
-    }
   }, []);
 
   const deleteOrder = useCallback(async (orderId: string) => {
-    // 1. Remove from local state
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
-
-    // 2. Remove from Supabase if configured
     if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from('orders')
-          .delete()
-          .eq('id', orderId);
-        if (error) console.error('Error deleting order from Supabase:', error);
-      } catch (err) {
-        console.error('Failed to delete order:', err);
+      const { error } = await supabase.from('orders').delete().eq('id', orderId);
+      if (error) {
+        console.error('Error deleting order from Supabase:', error);
+        return;
       }
     }
+
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
   }, []);
 
   const dismissUndo = useCallback(() => {
@@ -506,21 +494,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Delete completed order history to clean database & free storage
   const clearOrderHistory = useCallback(async () => {
-    // 1. Update local state
-    setOrders((prev) => prev.filter((o) => o.status !== 'COMPLETED'));
-
-    // 2. Delete from Supabase if configured
     if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from('orders')
-          .delete()
-          .eq('status', 'COMPLETED');
-        if (error) console.error('Error clearing completed orders from Supabase:', error);
-      } catch (err) {
-        console.error('Failed to clear completed orders:', err);
+      const { error } = await supabase.from('orders').delete().eq('status', 'COMPLETED');
+      if (error) {
+        console.error('Error clearing completed orders from Supabase:', error);
+        return;
       }
     }
+
+    setOrders((prev) => prev.filter((o) => o.status !== 'COMPLETED'));
   }, []);
 
   return (

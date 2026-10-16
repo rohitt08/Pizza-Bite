@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Phone, ArrowLeft, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
+import { X, User, Phone, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import type { CartItem, CustomerDetails } from '../../types';
 import { formatINR, calculateLineTotal } from '../../utils/currency';
 import { formatPhoneNumber } from '../../utils/formatters';
@@ -26,16 +26,20 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
   onConfirmOrder,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handlePlaceOrder = async () => {
     if (isSubmitting) return; // Prevent double click
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       // Simulate submission network latency (~900ms)
       await new Promise((resolve) => setTimeout(resolve, 900));
       await onConfirmOrder();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not place your order. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -147,16 +151,11 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
             </div>
           </div>
 
-          {/* Prototype disclaimer tag */}
-          <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-[11px] text-amber-800">
-            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Frontend Prototype Demo</p>
-              <p className="text-amber-700 leading-relaxed">
-                Clicking place order will simulate a live order in frontend state and send it straight to the Staff POS Dashboard.
-              </p>
-            </div>
-          </div>
+          {submitError && (
+            <p role="alert" className="text-sm font-semibold text-red-700" aria-live="polite">
+              {submitError}
+            </p>
+          )}
         </div>
 
         {/* Footer / Submit Button */}
