@@ -59,7 +59,9 @@ test('admin deep link is protected and deployed through Vercel rewrites', () => 
   assert.match(app, /path === '\/admin'/);
   assert.match(app, /path === '\/u804'/);
   assert.match(app, /<AdminLogin onLoginSuccess=/);
-  assert.match(vercel, /"source": "\/admin",\s*"destination": "\/index\.html"/);
+  assert.match(vercel, /"source": "\/u804",\s*"destination": "\/index\.html"/);
+  assert.match(vercel, /"source": "\/\(\.\*\)",\s*"destination": "\/index\.html"/);
+  assert.doesNotMatch(vercel, /"source": "\/admin"/);
 });
 
 test('checkout retries return existing orders only after phone verification', () => {
