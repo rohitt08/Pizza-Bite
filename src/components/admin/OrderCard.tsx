@@ -15,6 +15,7 @@ interface OrderCardProps {
 export const OrderCard: React.FC<OrderCardProps> = ({
   order,
   isOldestWaiting = false,
+  onAccept,
   onComplete,
 }) => {
   // Live ticking elapsed time
@@ -118,14 +119,22 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           </span>
         </div>
 
-        {/* Direct Complete Button for New Orders */}
+        {onAccept && (
+          <button
+            onClick={() => onAccept(order.id)}
+            className="py-3 px-5 sm:px-6 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all cursor-pointer text-stone-950 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-md shadow-amber-600/20 min-h-[44px] flex items-center justify-center gap-1.5"
+            title="Accept order and move it to preparation"
+          >
+            <span>ACCEPT</span>
+          </button>
+        )}
         {onComplete && (
           <button
             onClick={() => onComplete(order.id)}
             className="py-3 px-5 sm:px-6 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all cursor-pointer text-white bg-emerald-600 hover:bg-emerald-500 active:scale-95 shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400/40 min-h-[44px] flex items-center justify-center gap-1.5"
-            title="Mark order as completed and move to Order History"
+            title="Mark prepared order as completed"
           >
-            <span>MARK COMPLETED</span>
+            <span>COMPLETE</span>
           </button>
         )}
       </div>

@@ -113,16 +113,16 @@ The app can run locally without cloud credentials, but cross-device order synchr
 
 ---
 
-## 🚢 Deployment (Cloudflare Pages)
+## Vercel Deployment
 
-The project is structured for 1-click deployment to Cloudflare Pages (or Vercel / Netlify):
+The project is configured for Vercel:
 
 1. **Build Settings:**
    - **Framework Preset:** Vite
    - **Build Command:** `npm run build`
    - **Build Output Directory:** `dist`
 2. **SPA Routing:**
-   Vite builds a single-page application (`index.html`). For Cloudflare Pages, routing to `/admin` or `#admin` is handled seamlessly.
+  `vercel.json` rewrites `/admin` and `/u804` to the SPA entry point; other unknown paths show a not-found view.
 
 ---
 
@@ -181,6 +181,6 @@ SELECT vault.create_secret(
 );
 ```
 
-The SQL schema stores only a bcrypt hash in Supabase Vault. Each staff login verifies the PIN server-side; a successful session lasts 12 hours, and five failed 4–6 digit PIN checks lock that anonymous user for 15 minutes. In Supabase Auth, enable CAPTCHA protection and configure the strictest suitable anonymous sign-up rate limits; per-user lockout alone cannot prevent attackers from creating new anonymous identities. The schema allows customers to insert new orders, while reads, updates, and deletes require a verified staff session. If the Supabase URL/key or Vault PIN hash is missing, staff access fails closed; the local-storage fallback is not suitable for production customer data. The previously configured PIN was committed in repository history, so revoke it and provision a different PIN before storing real customer data.
+The SQL schema stores only a bcrypt hash in Supabase Vault. Each staff login verifies the PIN server-side; a successful session lasts 12 hours, and five failed 4–6 digit PIN checks lock that anonymous user for 15 minutes. Configure strict Supabase anonymous sign-up rate limits. Per-user lockout can be bypassed by creating fresh anonymous identities, so this short PIN authentication is not suitable for high-risk data until a server-side IP/device rate limiter or a full staff identity provider is added. Do not enable Supabase CAPTCHA until the login UI is updated to supply the CAPTCHA token. Customer checkout calls `create_customer_order`, which validates customer fields and quantities, looks up item names/prices in a private catalog, computes totals, and atomically allocates the order token. Direct table inserts are not granted. Order reads, updates, and deletes require a verified staff session. If the Supabase URL/key or Vault PIN hash is missing, staff access fails closed; local-storage fallback is not suitable for production customer data. The previously configured PIN was committed in repository history, so revoke it and provision a different PIN before storing real customer data.
 
-If order placement reports that `next_order_number` is missing from the schema cache, run the latest `supabase_schema.sql` in the Supabase SQL Editor for the same project URL configured in Vercel. It upgrades older `orders` tables in place, installs the zero-argument RPC and grants, then reloads PostgREST's schema cache. Wait several seconds before retrying. Use `supabase_rpc_repair.sql` only when the database already has the current `orders` columns. If the error remains, confirm that `public` is listed under Supabase **Project Settings → API → Exposed schemas**, and verify the Vercel URL and publishable key belong to this exact Supabase project.
+For schema-cache errors, run the latest `supabase_schema.sql` in the Supabase SQL Editor for the same project URL configured in Vercel. It upgrades legacy `orders` tables and installs the atomic checkout RPC. If an RPC is still missing after migration, confirm `public` is listed under Supabase **Project Settings → API → Exposed schemas**, then reload the PostgREST schema and verify Vercel's URL and publishable key belong to that project.

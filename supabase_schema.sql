@@ -27,6 +27,14 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 
+UPDATE public.orders
+SET customer_name = COALESCE(NULLIF(btrim(customer_name), ''), 'Customer'),
+    customer_phone = COALESCE(customer_phone, ''),
+    items = COALESCE(items, '[]'::jsonb),
+    total = COALESCE(total, 0),
+    status = COALESCE(NULLIF(status, ''), 'NEW'),
+    created_at = COALESCE(created_at, timezone('utc'::text, now()));
+
 -- Older schemas stored one product per row and may require these legacy-only fields.
 DO $$
 DECLARE
@@ -81,28 +89,12 @@ BEGIN
   FROM pg_sequences
   WHERE schemaname = 'public' AND sequencename = 'order_number_seq';
 
-  IF existing_last_value IS NULL THEN
-    IF EXISTS (
-      SELECT 1
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'orders'
-        AND column_name IN ('order_number', 'orderNumber')
-    ) THEN
-      EXECUTE format(
-        'SELECT MAX(NULLIF(regexp_replace(%I::text, ''[^0-9]'', '''', ''g''), '''')::BIGINT) FROM public.orders',
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'order_number'
-          ) THEN 'order_number'
-          ELSE 'orderNumber'
-        END
-      ) INTO highest_order_number;
-    ELSE
-      highest_order_number := 1041;
-    END IF;
+  SELECT MAX(NULLIF(regexp_replace(order_number, '[^0-9]', '', 'g'), '')::BIGINT)
+  INTO highest_order_number
+  FROM public.orders
+  WHERE order_number IS NOT NULL;
 
+  IF existing_last_value IS NULL OR existing_last_value < COALESCE(highest_order_number, 1041) THEN
     PERFORM setval(
       'public.order_number_seq',
       GREATEST(COALESCE(highest_order_number, 1041), 1041)
@@ -122,22 +114,184 @@ WHERE bill_id IS NULL OR btrim(bill_id) = '';
 ALTER TABLE public.orders ALTER COLUMN order_number SET NOT NULL;
 ALTER TABLE public.orders ALTER COLUMN bill_id SET NOT NULL;
 
-CREATE OR REPLACE FUNCTION public.next_order_number()
-RETURNS TEXT
-LANGUAGE SQL
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT 'PB-' || nextval('public.order_number_seq')::TEXT;
-$$;
+CREATE INDEX IF NOT EXISTS orders_created_at_desc_idx
+ON public.orders (created_at DESC);
+CREATE INDEX IF NOT EXISTS orders_status_created_at_idx
+ON public.orders (status, created_at DESC);
 
-REVOKE ALL ON FUNCTION public.next_order_number() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.next_order_number() TO anon, authenticated;
+DROP FUNCTION IF EXISTS public.next_order_number();
 
 -- Staff PIN hashes and staff sessions are not exposed through the Data API.
 CREATE SCHEMA IF NOT EXISTS private;
 REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
 GRANT USAGE ON SCHEMA private TO authenticated;
+
+CREATE TABLE IF NOT EXISTS private.menu_products (
+  product_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  unit_price NUMERIC NOT NULL CHECK (unit_price > 0),
+  available BOOLEAN NOT NULL DEFAULT TRUE
+);
+REVOKE ALL ON private.menu_products FROM PUBLIC, anon, authenticated;
+
+INSERT INTO private.menu_products (product_id, name, unit_price) VALUES
+  ('prod-corn-pizza', 'Corn Pizza', 109),
+  ('prod-paneer-onion-pizza', 'Paneer & Onion Pizza', 139),
+  ('prod-paneer-corn-pizza', 'Paneer & Corn Pizza', 169),
+  ('prod-farmhouse-pizza', 'Farmhouse Pizza', 199),
+  ('prod-veg-burger', 'Veg Burger', 49),
+  ('prod-cheese-burger', 'Cheese Burger', 69),
+  ('prod-cheese-corn-sandwich', 'Cheese & Corn Sandwich', 79),
+  ('prod-paneer-corn-cheese-sandwich', 'Paneer & Corn and Cheese Sandwich', 109),
+  ('prod-peri-peri-fries-regular', 'Peri Peri Fries (Regular)', 59),
+  ('prod-peri-peri-fries-large', 'Peri Peri Fries (Large)', 89),
+  ('prod-cold-coffee', 'Cold Coffee', 49)
+ON CONFLICT (product_id) DO UPDATE
+SET name = EXCLUDED.name,
+    unit_price = EXCLUDED.unit_price;
+
+CREATE OR REPLACE FUNCTION private.prepare_customer_order()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  item JSONB;
+  normalized_items JSONB := '[]'::jsonb;
+  requested_product_id TEXT;
+  product_name TEXT;
+  product_price NUMERIC;
+  item_quantity INTEGER;
+  calculated_total NUMERIC := 0;
+BEGIN
+  NEW.customer_name := btrim(COALESCE(NEW.customer_name, ''));
+  NEW.customer_phone := regexp_replace(COALESCE(NEW.customer_phone, ''), '[^0-9]', '', 'g');
+
+  IF char_length(NEW.customer_name) < 2 OR char_length(NEW.customer_name) > 100 THEN
+    RAISE EXCEPTION 'Enter a valid customer name';
+  END IF;
+  IF NEW.customer_phone !~ '^[6-9][0-9]{9}$' THEN
+    RAISE EXCEPTION 'Enter a valid 10-digit Indian mobile number';
+  END IF;
+  IF NEW.items IS NULL OR jsonb_typeof(NEW.items) <> 'array' THEN
+    RAISE EXCEPTION 'Order items must be a JSON array';
+  END IF;
+  IF jsonb_array_length(NEW.items) NOT BETWEEN 1 AND 30 THEN
+    RAISE EXCEPTION 'Order must contain between 1 and 30 items';
+  END IF;
+  IF jsonb_array_length(NEW.items) <> (
+    SELECT count(DISTINCT entry.value->>'productId')
+    FROM jsonb_array_elements(NEW.items) AS entry(value)
+  ) THEN
+    RAISE EXCEPTION 'Duplicate menu items are not allowed';
+  END IF;
+
+  FOR item IN SELECT entry.value FROM jsonb_array_elements(NEW.items) AS entry(value)
+  LOOP
+    IF jsonb_typeof(item) <> 'object'
+      OR item->>'productId' IS NULL
+      OR COALESCE(item->>'quantity', '') !~ '^[1-9][0-9]?$'
+    THEN
+      RAISE EXCEPTION 'Order contains an invalid item';
+    END IF;
+
+    requested_product_id := item->>'productId';
+    item_quantity := (item->>'quantity')::INTEGER;
+
+    SELECT menu.name, menu.unit_price INTO product_name, product_price
+    FROM private.menu_products AS menu
+    WHERE menu.product_id = requested_product_id AND menu.available;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Order contains an unavailable menu item';
+    END IF;
+
+    normalized_items := normalized_items || jsonb_build_array(jsonb_build_object(
+      'productId', requested_product_id,
+      'nameSnapshot', product_name,
+      'unitPrice', product_price,
+      'quantity', item_quantity,
+      'lineTotal', product_price * item_quantity
+    ));
+    calculated_total := calculated_total + product_price * item_quantity;
+  END LOOP;
+
+  NEW.items := normalized_items;
+  NEW.total := calculated_total;
+  NEW.order_number := 'PB-' || nextval('public.order_number_seq')::TEXT;
+  NEW.created_at := clock_timestamp();
+  NEW.bill_id := 'PB-' || to_char(NEW.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD')
+    || '-' || regexp_replace(NEW.order_number, '[^0-9]', '', 'g');
+  NEW.status := 'NEW';
+  NEW.completed_at := NULL;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS prepare_customer_order ON public.orders;
+CREATE TRIGGER prepare_customer_order
+BEFORE INSERT ON public.orders
+FOR EACH ROW EXECUTE FUNCTION private.prepare_customer_order();
+
+REVOKE ALL ON FUNCTION private.prepare_customer_order() FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.create_customer_order(
+  p_order_id TEXT,
+  p_customer_name TEXT,
+  p_customer_phone TEXT,
+  p_items JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  created_order public.orders%ROWTYPE;
+  id_is_uuid BOOLEAN;
+BEGIN
+  IF p_order_id IS NULL OR p_order_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
+    RAISE EXCEPTION 'Invalid order identifier';
+  END IF;
+
+  SELECT data_type = 'uuid' INTO id_is_uuid
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'id';
+
+  IF id_is_uuid THEN
+    INSERT INTO public.orders (
+      id, order_number, bill_id, customer_name, customer_phone, items, total, status
+    ) VALUES (
+      p_order_id::UUID, 'PB-PENDING', 'PB-PENDING', p_customer_name, p_customer_phone, p_items, 0, 'NEW'
+    ) ON CONFLICT (id) DO NOTHING
+    RETURNING * INTO created_order;
+  ELSE
+    INSERT INTO public.orders (
+      id, order_number, bill_id, customer_name, customer_phone, items, total, status
+    ) VALUES (
+      p_order_id, 'PB-PENDING', 'PB-PENDING', p_customer_name, p_customer_phone, p_items, 0, 'NEW'
+    ) ON CONFLICT (id) DO NOTHING
+    RETURNING * INTO created_order;
+  END IF;
+
+  IF NOT FOUND THEN
+    SELECT * INTO created_order
+    FROM public.orders
+    WHERE id::TEXT = p_order_id
+      AND customer_phone = regexp_replace(COALESCE(p_customer_phone, ''), '[^0-9]', '', 'g');
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Order request could not be verified';
+    END IF;
+  END IF;
+
+  RETURN to_jsonb(created_order);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_customer_order(TEXT, TEXT, TEXT, JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_customer_order(TEXT, TEXT, TEXT, JSONB) TO anon, authenticated;
 
 CREATE TABLE IF NOT EXISTS private.staff_sessions (
   user_id UUID PRIMARY KEY,
@@ -208,7 +362,9 @@ DECLARE
   current_user_id UUID := auth.uid();
   current_lock TIMESTAMPTZ;
 BEGIN
-  IF current_user_id IS NULL OR submitted_pin !~ '^[0-9]{4,6}$' THEN
+  IF current_user_id IS NULL
+    OR submitted_pin IS NULL
+    OR submitted_pin !~ '^[0-9]{4,6}$' THEN
     RETURN FALSE;
   END IF;
 
@@ -229,7 +385,7 @@ BEGIN
     RAISE EXCEPTION 'Staff PIN hash is not configured in Supabase Vault';
   END IF;
 
-  IF extensions.crypt(submitted_pin, pin_hash) <> pin_hash THEN
+  IF extensions.crypt(submitted_pin, pin_hash) IS DISTINCT FROM pin_hash THEN
     INSERT INTO private.staff_pin_attempts (user_id, failed_attempts, locked_until)
     VALUES (current_user_id, 1, NULL)
     ON CONFLICT (user_id) DO UPDATE
@@ -258,7 +414,6 @@ GRANT EXECUTE ON FUNCTION public.verify_staff_pin(TEXT) TO authenticated;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders REPLICA IDENTITY FULL;
 
--- Remove legacy and custom permissive policies before applying the restricted set.
 DO $$
 DECLARE
   existing_policy RECORD;
@@ -274,13 +429,7 @@ END
 $$;
 
 REVOKE ALL ON public.orders FROM PUBLIC, anon, authenticated;
-GRANT INSERT ON public.orders TO anon, authenticated;
 GRANT SELECT, UPDATE, DELETE ON public.orders TO authenticated;
-
-CREATE POLICY "Customers can place new orders"
-ON public.orders FOR INSERT
-TO anon, authenticated
-WITH CHECK (status = 'NEW' AND completed_at IS NULL);
 
 CREATE POLICY "Staff can read orders"
 ON public.orders FOR SELECT

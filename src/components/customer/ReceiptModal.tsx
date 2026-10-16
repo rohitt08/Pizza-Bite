@@ -129,9 +129,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           {/* Receipt Footer */}
           <div className="text-center pt-3 text-[11px] text-stone-500 border-t border-dashed border-stone-200">
             <p className="font-semibold text-stone-700">Thank you for dining with Pizza Bite!</p>
-            <p className="mt-0.5">Please show token {order.orderNumber} at the counter counter for collection.</p>
+            <p className="mt-0.5">Please show token {order.orderNumber} at the counter for collection.</p>
             <p className="text-[10px] text-stone-400 mt-2 font-mono">
-              [Simulated Prototype Data · Asia/Kolkata]
+              [Asia/Kolkata]
             </p>
           </div>
         </div>

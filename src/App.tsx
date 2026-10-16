@@ -5,27 +5,27 @@ import { AdminView } from './pages/AdminView';
 import { AdminLogin } from './pages/AdminLogin';
 import { isSupabaseConfigured, supabase } from './utils/supabase';
 
-export function App() {
-  const getInitialRoute = (): 'customer' | 'admin' => {
-    if (typeof window === 'undefined') return 'customer';
-    const path = window.location.pathname.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-    if (path.includes('/u804') || hash.includes('#u804')) {
-      return 'admin';
-    }
-    return 'customer';
-  };
+type AppRoute = 'customer' | 'admin' | 'not-found';
 
-  const [currentRoute, setCurrentRoute] = useState<'customer' | 'admin'>(getInitialRoute);
+function resolveRoute(location: Location): AppRoute {
+  const path = location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+  const hash = location.hash.toLowerCase();
+  if (path === '/' && (!hash || hash === '#')) return 'customer';
+  if (path === '/admin' || path === '/u804' || hash === '#admin' || hash === '#u804') return 'admin';
+  return 'not-found';
+}
+
+export function App() {
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() =>
+    typeof window === 'undefined' ? 'customer' : resolveRoute(window.location)
+  );
   const [isStaff, setIsStaff] = useState(false);
   const [isCheckingStaff, setIsCheckingStaff] = useState(currentRoute === 'admin');
 
   // Sync with browser navigation (back/forward buttons)
   useEffect(() => {
     const handleLocationChange = () => {
-      const path = window.location.pathname.toLowerCase();
-      const hash = window.location.hash.toLowerCase();
-      const nextRoute = path.includes('/u804') || hash.includes('#u804') ? 'admin' : 'customer';
+      const nextRoute = resolveRoute(window.location);
       if (nextRoute !== currentRoute) setIsCheckingStaff(nextRoute === 'admin');
       setCurrentRoute(nextRoute);
     };
@@ -51,19 +51,22 @@ export function App() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        if (active) {
-          setIsStaff(false);
-          setIsCheckingStaff(false);
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !sessionData.session) {
+          if (active) {
+            setIsStaff(false);
+            setIsCheckingStaff(false);
+          }
+          return;
         }
-        return;
-      }
 
-      const { data, error } = await supabase.rpc('is_staff_session');
-      if (active) {
-        setIsStaff(!error && data === true);
-        setIsCheckingStaff(false);
+        const { data, error } = await supabase.rpc('is_staff_session');
+        if (active) setIsStaff(!error && data === true);
+      } catch {
+        if (active) setIsStaff(false);
+      } finally {
+        if (active) setIsCheckingStaff(false);
       }
     };
 
@@ -103,7 +106,17 @@ export function App() {
           <AdminLogin onLoginSuccess={() => setIsStaff(true)} />
         )
       ) : (
-        <CustomerView />
+        currentRoute === 'customer' ? (
+          <CustomerView />
+        ) : (
+          <main className="min-h-screen bg-stone-950 text-white flex items-center justify-center px-6 text-center">
+            <div>
+              <h1 className="text-2xl font-black">Page not found</h1>
+              <p className="mt-2 text-sm text-stone-400">That Pizza Bite page does not exist.</p>
+              <a href="/" className="inline-flex mt-5 px-4 py-2 rounded-lg bg-rose-600 font-bold">Back to menu</a>
+            </div>
+          </main>
+        )
       )}
     </OrderProvider>
   );
