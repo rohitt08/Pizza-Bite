@@ -16,6 +16,59 @@ CREATE TABLE IF NOT EXISTS public.orders (
   completed_at TIMESTAMPTZ
 );
 
+-- CREATE TABLE IF NOT EXISTS does not add columns to an existing legacy table.
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_number TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS bill_id TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_name TEXT NOT NULL DEFAULT 'Customer';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_phone TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'NEW';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+-- Older schemas stored one product per row and may require these legacy-only fields.
+DO $$
+DECLARE
+  legacy_column TEXT;
+BEGIN
+  FOREACH legacy_column IN ARRAY ARRAY['customer_id', 'product_name', 'quantity', 'price']
+  LOOP
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'orders'
+        AND column_name = legacy_column
+        AND is_nullable = 'NO'
+    ) THEN
+      EXECUTE format('ALTER TABLE public.orders ALTER COLUMN %I DROP NOT NULL', legacy_column);
+    END IF;
+  END LOOP;
+END
+$$;
+
+-- Preserve product details from the former row-per-product schema.
+UPDATE public.orders AS legacy_order
+SET items = jsonb_build_array(jsonb_build_object(
+  'productId', COALESCE(to_jsonb(legacy_order)->>'product_id', 'legacy'),
+  'nameSnapshot', COALESCE(to_jsonb(legacy_order)->>'product_name', 'Legacy item'),
+  'unitPrice', COALESCE(NULLIF(to_jsonb(legacy_order)->>'price', '')::NUMERIC, 0),
+  'quantity', COALESCE(NULLIF(to_jsonb(legacy_order)->>'quantity', '')::INTEGER, 1),
+  'lineTotal',
+    COALESCE(NULLIF(to_jsonb(legacy_order)->>'price', '')::NUMERIC, 0)
+    * COALESCE(NULLIF(to_jsonb(legacy_order)->>'quantity', '')::INTEGER, 1)
+))
+WHERE legacy_order.items = '[]'::jsonb
+  AND to_jsonb(legacy_order) ? 'product_name';
+
+UPDATE public.orders
+SET total = (
+  SELECT COALESCE(SUM((item->>'lineTotal')::NUMERIC), 0)
+  FROM jsonb_array_elements(items) AS elements(item)
+)
+WHERE total = 0 AND items <> '[]'::jsonb;
+
 -- Allocate unique order tokens centrally across every customer device.
 CREATE SEQUENCE IF NOT EXISTS public.order_number_seq START WITH 1042;
 
@@ -29,9 +82,26 @@ BEGIN
   WHERE schemaname = 'public' AND sequencename = 'order_number_seq';
 
   IF existing_last_value IS NULL THEN
-    SELECT MAX(NULLIF(regexp_replace(order_number, '[^0-9]', '', 'g'), '')::BIGINT)
-    INTO highest_order_number
-    FROM public.orders;
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'orders'
+        AND column_name IN ('order_number', 'orderNumber')
+    ) THEN
+      EXECUTE format(
+        'SELECT MAX(NULLIF(regexp_replace(%I::text, ''[^0-9]'', '''', ''g''), '''')::BIGINT) FROM public.orders',
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'order_number'
+          ) THEN 'order_number'
+          ELSE 'orderNumber'
+        END
+      ) INTO highest_order_number;
+    ELSE
+      highest_order_number := 1041;
+    END IF;
 
     PERFORM setval(
       'public.order_number_seq',
@@ -40,6 +110,17 @@ BEGIN
   END IF;
 END
 $$;
+
+UPDATE public.orders
+SET order_number = 'PB-' || nextval('public.order_number_seq')::TEXT
+WHERE order_number IS NULL OR btrim(order_number) = '';
+
+UPDATE public.orders
+SET bill_id = 'PB-' || to_char(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD') || '-' || regexp_replace(order_number, '[^0-9]', '', 'g')
+WHERE bill_id IS NULL OR btrim(bill_id) = '';
+
+ALTER TABLE public.orders ALTER COLUMN order_number SET NOT NULL;
+ALTER TABLE public.orders ALTER COLUMN bill_id SET NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.next_order_number()
 RETURNS TEXT

@@ -404,7 +404,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
 
     const newOrder: Order = {
-      id: `ord-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: crypto.randomUUID(),
       orderNumber,
       billId,
       customerName: customerDetails.name.trim(),
