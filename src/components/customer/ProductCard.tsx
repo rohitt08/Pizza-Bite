@@ -95,14 +95,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {!product.available ? (
               <button
                 disabled
-                className="px-3 py-1.5 rounded-xl bg-stone-200 text-stone-400 text-xs font-semibold cursor-not-allowed select-none"
+                className="min-h-11 px-3 py-2 rounded-xl bg-stone-200 text-stone-400 text-xs font-semibold cursor-not-allowed select-none"
               >
                 Unavailable
               </button>
             ) : quantity === 0 ? (
               <button
                 onClick={onAdd}
-                className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold tracking-wide shadow-xs shadow-rose-600/20 transition-all cursor-pointer"
+                className="min-h-11 flex items-center gap-1 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold tracking-wide shadow-xs shadow-rose-600/20 transition-all cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>ADD</span>
@@ -111,17 +111,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <div className="flex items-center bg-stone-900 text-white rounded-xl p-0.5 shadow-sm">
                 <button
                   onClick={() => onUpdateQuantity(quantity - 1)}
-                  className="w-7 h-7 flex items-center justify-center hover:bg-stone-800 rounded-lg text-white transition-colors cursor-pointer active:scale-90"
+                  className="w-11 h-11 flex items-center justify-center hover:bg-stone-800 rounded-lg text-white transition-colors cursor-pointer active:scale-90"
                   aria-label="Decrease quantity"
                 >
                   <Minus className="w-3.5 h-3.5" />
                 </button>
-                <span className="w-7 text-center font-bold text-xs tabular-nums text-white">
+                <span className="w-6 text-center font-bold text-xs tabular-nums text-white">
                   {quantity}
                 </span>
                 <button
                   onClick={() => onUpdateQuantity(quantity + 1)}
-                  className="w-7 h-7 flex items-center justify-center hover:bg-stone-800 rounded-lg text-white transition-colors cursor-pointer active:scale-90"
+                  className="w-11 h-11 flex items-center justify-center hover:bg-stone-800 rounded-lg text-white transition-colors cursor-pointer active:scale-90"
                   aria-label="Increase quantity"
                 >
                   <Plus className="w-3.5 h-3.5" />

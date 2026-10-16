@@ -229,8 +229,8 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({
 
       {/* Custom Confirmation Modal Card */}
       {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/80 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-stone-900 border border-stone-800 rounded-3xl p-5 sm:p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] bg-stone-950/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-stone-900 border border-stone-800 rounded-3xl p-5 sm:p-6 max-w-sm w-full my-auto shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
             <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>

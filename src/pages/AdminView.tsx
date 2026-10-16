@@ -33,7 +33,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onLogout, onSwitchToCustom
   const completedOrders = orders.filter((o) => o.status === 'COMPLETED');
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col selection:bg-rose-600 selection:text-white">
+    <div className="min-h-screen min-h-[100dvh] bg-stone-950 text-stone-100 flex flex-col selection:bg-rose-600 selection:text-white">
       {/* POS Header */}
       <DashboardHeader
         soundEnabled={soundEnabled}

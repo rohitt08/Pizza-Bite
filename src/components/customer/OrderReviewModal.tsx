@@ -47,7 +47,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] bg-stone-950/70 backdrop-blur-xs">
       <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-stone-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-5 py-4 border-b border-stone-100 bg-stone-50/70 flex items-center justify-between">
@@ -55,7 +55,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
             <button
               onClick={onBackToCart}
               disabled={isSubmitting}
-              className="p-1 rounded-lg hover:bg-stone-200 text-stone-600 transition-colors cursor-pointer"
+              className="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-stone-200 text-stone-600 transition-colors cursor-pointer"
               title="Back to Cart"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -66,14 +66,14 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
           <button
             onClick={onClose}
             disabled={isSubmitting}
-            className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-11 h-11 shrink-0 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-4 max-h-[72vh] overflow-y-auto">
+        <div className="p-5 space-y-4 max-h-[72vh] max-h-[72dvh] overflow-y-auto overscroll-contain">
           {/* Customer Summary Card */}
           <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80 flex items-center justify-between">
             <div className="space-y-1">
@@ -93,7 +93,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
             <button
               onClick={onEditCustomer}
               disabled={isSubmitting}
-              className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-white border border-rose-200 px-3 py-1.5 rounded-xl shadow-2xs hover:bg-rose-50 transition-colors cursor-pointer"
+              className="min-h-11 text-xs font-bold text-rose-600 hover:text-rose-700 bg-white border border-rose-200 px-3 py-2 rounded-xl shadow-2xs hover:bg-rose-50 transition-colors cursor-pointer"
             >
               Edit
             </button>

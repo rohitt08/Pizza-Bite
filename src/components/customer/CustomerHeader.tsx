@@ -16,11 +16,11 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   cartCount,
 }) => {
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs">
+    <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs">
       {/* Main Header */}
-      <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
         {/* Brand identity */}
-        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-rose-600 flex items-center justify-center shadow-md shadow-rose-600/20 overflow-hidden ring-2 ring-rose-100">
             <img
               src="/logo.png"
@@ -37,7 +37,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
               <h1 className="text-xl font-extrabold tracking-tight text-stone-900 leading-none">
                 Pizza Bite
               </h1>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">
+              <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">
                 Fresh Fast Food
               </span>
             </div>
@@ -48,7 +48,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
                 href="https://instagram.com/thepizzabitee"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-rose-600 transition-colors"
+                className="inline-flex min-h-11 items-center hover:text-rose-600 transition-colors"
               >
                 @thepizzabitee
               </a>
@@ -61,7 +61,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
           {customerDetails && (
             <button
               onClick={onEditCustomer}
-              className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200/80 px-2.5 py-1.5 rounded-lg border border-stone-200 transition-colors"
+              className="min-h-11 flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200/80 px-2.5 py-2 rounded-lg border border-stone-200 transition-colors"
               title="Change customer details"
             >
               <User className="w-3.5 h-3.5 text-rose-600" />
@@ -75,7 +75,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
           <button
             onClick={onOpenCart}
             aria-label="View Cart"
-            className="relative p-2.5 rounded-xl bg-stone-900 text-white hover:bg-stone-800 transition-all shadow-sm active:scale-95"
+            className="relative min-w-11 min-h-11 p-2.5 rounded-xl bg-stone-900 text-white hover:bg-stone-800 transition-all shadow-sm active:scale-95 shrink-0"
           >
             <ShoppingBag className="w-5 h-5" />
             {cartCount > 0 && (

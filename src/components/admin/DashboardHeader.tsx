@@ -45,7 +45,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   }, []);
 
   return (
-    <header className="bg-stone-900 border-b border-stone-800 text-stone-100 sticky top-0 z-40 shadow-lg">
+    <header className="bg-stone-900 border-b border-stone-800 text-stone-100 sticky top-0 z-40 pt-[env(safe-area-inset-top)] shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Status */}
         <div className="flex items-center gap-3.5">
@@ -86,7 +86,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           {/* Sound Toggle */}
           <button
             onClick={onToggleSound}
-            className={`p-2 rounded-xl text-xs font-semibold transition-colors border cursor-pointer ${
+            className={`min-w-11 min-h-11 p-2 rounded-xl text-xs font-semibold transition-colors border cursor-pointer ${
               soundEnabled
                 ? 'bg-stone-800 hover:bg-stone-700 text-stone-200 border-stone-700'
                 : 'bg-stone-900 hover:bg-stone-800 text-stone-500 border-stone-800'
@@ -107,7 +107,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           {onLogout && (
             <button
               onClick={onLogout}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-stone-300 bg-stone-850 hover:bg-stone-800 hover:text-white border border-stone-700/80 transition-all cursor-pointer active:scale-95"
+              className="min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-stone-300 bg-stone-850 hover:bg-stone-800 hover:text-white border border-stone-700/80 transition-all cursor-pointer active:scale-95"
               title="Lock Admin Dashboard"
             >
               <LogOut className="w-3.5 h-3.5 text-rose-400" />

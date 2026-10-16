@@ -106,7 +106,7 @@ export const CustomerView: React.FC<CustomerViewProps> = () => {
   const [isMenuPosterOpen, setIsMenuPosterOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-stone-50 pb-24 text-stone-900 selection:bg-rose-500 selection:text-white">
+    <div className="min-h-screen min-h-[100dvh] bg-stone-50 pb-24 text-stone-900 selection:bg-rose-500 selection:text-white">
       {/* Customer Header */}
       <CustomerHeader
         customerDetails={customerDetails}
@@ -139,7 +139,7 @@ export const CustomerView: React.FC<CustomerViewProps> = () => {
 
             <button
               onClick={() => setIsMenuPosterOpen(true)}
-              className="self-start sm:self-auto shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-750 text-amber-300 border border-amber-400/30 text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
+              className="self-start sm:self-auto shrink-0 min-h-11 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-750 text-amber-300 border border-amber-400/30 text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
             >
               <span>View Stall Menu Card</span>
             </button>
@@ -281,7 +281,7 @@ export const CustomerView: React.FC<CustomerViewProps> = () => {
 
       {/* Official Menu Poster Modal */}
       {isMenuPosterOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/85 backdrop-blur-xs overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] bg-stone-950/85 backdrop-blur-xs">
           <div className="bg-stone-900 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-stone-800 animate-in zoom-in-95 duration-200">
             <div className="px-4 py-3 border-b border-stone-800 flex items-center justify-between text-white bg-stone-925">
               <div className="flex items-center gap-2">
@@ -297,7 +297,7 @@ export const CustomerView: React.FC<CustomerViewProps> = () => {
                 ✕
               </button>
             </div>
-            <div className="p-3 bg-stone-950 max-h-[80vh] overflow-y-auto">
+            <div className="p-3 bg-stone-950 max-h-[80vh] max-h-[80dvh] overflow-y-auto overscroll-contain">
               <img
                 src="/images/menu_poster.jpg"
                 alt="Pizza Bite Official Menu Board"

@@ -19,8 +19,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/80 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl border border-stone-100 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-stone-950/80 backdrop-blur-xs">
+      <div className="bg-white w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl border border-stone-100 overflow-hidden my-auto max-h-[92vh] max-h-[92dvh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
         
         {/* Screen-only top celebration banner */}
         <div className="no-print bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 sm:p-5 text-center shrink-0">

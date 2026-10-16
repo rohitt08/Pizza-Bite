@@ -42,7 +42,7 @@ export const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] bg-stone-950/70 backdrop-blur-xs">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-stone-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Banner with Pizza Bite aesthetic */}
         <div className="bg-gradient-to-br from-rose-600 via-rose-600 to-rose-700 text-white p-6 sm:p-7 relative overflow-hidden">
@@ -80,7 +80,7 @@ export const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({
           {canDismiss && onClose && (
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/10 hover:bg-black/20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              className="absolute top-3 right-3 text-white/80 hover:text-white bg-black/10 hover:bg-black/20 rounded-full w-11 h-11 flex items-center justify-center transition-colors"
             >
               ✕
             </button>
@@ -164,7 +164,7 @@ export const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({
             <button
               type="submit"
               disabled={touched.name && touched.phone && !isValid}
-              className={`w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl font-bold text-sm tracking-wide transition-all shadow-md active:scale-98 cursor-pointer ${
+              className={`w-full min-h-11 flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl font-bold text-sm tracking-wide transition-all shadow-md active:scale-98 cursor-pointer ${
                 isValid
                   ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30'
                   : 'bg-stone-200 text-stone-400 hover:bg-stone-300 hover:text-stone-700 cursor-not-allowed'

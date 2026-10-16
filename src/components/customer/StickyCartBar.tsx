@@ -16,14 +16,14 @@ export const StickyCartBar: React.FC<StickyCartBarProps> = ({
   if (totalItems <= 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 p-3 sm:p-4 pointer-events-none">
+    <div className="fixed bottom-0 left-0 right-0 z-40 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 pointer-events-none">
       <div className="max-w-xl mx-auto pointer-events-auto">
         <button
           onClick={onOpenCart}
-          className="w-full bg-stone-950 text-white rounded-2xl p-3 sm:p-3.5 shadow-xl shadow-stone-950/25 border border-stone-800 flex items-center justify-between transition-all hover:bg-stone-900 active:scale-98 cursor-pointer group"
+          className="w-full min-h-14 bg-stone-950 text-white rounded-2xl p-2.5 sm:p-3.5 shadow-xl shadow-stone-950/25 border border-stone-800 flex items-center justify-between gap-2 transition-all hover:bg-stone-900 active:scale-98 cursor-pointer group"
         >
           {/* Left: item count & badge */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-rose-600 flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
               <ShoppingBag className="w-5 h-5" />
             </div>

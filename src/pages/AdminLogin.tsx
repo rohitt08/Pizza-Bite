@@ -78,7 +78,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   };
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col justify-center items-center px-4 py-8 selection:bg-rose-600 selection:text-white">
+    <div className="min-h-screen min-h-[100dvh] bg-stone-950 text-stone-100 flex flex-col justify-center items-center px-4 py-8 selection:bg-rose-600 selection:text-white">
       <div className="w-full max-w-sm bg-stone-900 border border-stone-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         
         {/* Header */}

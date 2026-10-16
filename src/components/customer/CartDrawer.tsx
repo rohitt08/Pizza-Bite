@@ -27,12 +27,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-950/60 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] bg-stone-950/60 backdrop-blur-xs">
       <div
-        className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200"
+        className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] max-h-[90dvh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200"
       >
         {/* Drawer Header */}
-        <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
               <ShoppingBag className="w-4 h-4" />
@@ -47,7 +47,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-11 h-11 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Close cart"
           >
             <X className="w-4 h-4" />
@@ -55,7 +55,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         </div>
 
         {/* Cart Item List */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-3.5 divide-y divide-stone-100">
+        <div className="p-4 sm:p-5 overflow-y-auto overscroll-contain flex-1 min-h-0 space-y-3.5 divide-y divide-stone-100">
           {cart.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 rounded-full bg-stone-100 text-stone-400 mx-auto flex items-center justify-center mb-3">
@@ -67,7 +67,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </p>
               <button
                 onClick={onClose}
-                className="mt-5 px-5 py-2.5 rounded-xl bg-stone-900 text-white font-bold text-xs uppercase tracking-wider hover:bg-stone-800 cursor-pointer"
+                className="mt-5 min-h-11 px-5 py-2.5 rounded-xl bg-stone-900 text-white font-bold text-xs uppercase tracking-wider hover:bg-stone-800 cursor-pointer"
               >
                 Browse Menu
               </button>
@@ -107,10 +107,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                   {/* Quantity Stepper & Remove */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center bg-stone-100 rounded-xl p-1 border border-stone-200">
+                      <div className="flex items-center bg-stone-100 rounded-xl p-1 border border-stone-200">
                       <button
                         onClick={() => onUpdateQuantity(item.product.id, item.quantity - 1)}
-                        className="w-6 h-6 flex items-center justify-center hover:bg-white rounded-lg text-stone-700 hover:text-stone-900 transition-colors cursor-pointer active:scale-90"
+                        className="w-11 h-11 flex items-center justify-center hover:bg-white rounded-lg text-stone-700 hover:text-stone-900 transition-colors cursor-pointer active:scale-90"
                         title="Decrease"
                       >
                         <Minus className="w-3 h-3" />
@@ -120,7 +120,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </span>
                       <button
                         onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)}
-                        className="w-6 h-6 flex items-center justify-center hover:bg-white rounded-lg text-stone-700 hover:text-stone-900 transition-colors cursor-pointer active:scale-90"
+                        className="w-11 h-11 flex items-center justify-center hover:bg-white rounded-lg text-stone-700 hover:text-stone-900 transition-colors cursor-pointer active:scale-90"
                         title="Increase"
                       >
                         <Plus className="w-3 h-3" />
@@ -129,7 +129,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                     <button
                       onClick={() => onRemoveItem(item.product.id)}
-                      className="w-8 h-8 rounded-xl text-stone-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-11 h-11 rounded-xl text-stone-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
                       title="Remove item"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -143,7 +143,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
         {/* Cart Footer */}
         {cart.length > 0 && (
-          <div className="p-5 border-t border-stone-100 bg-stone-50/70 space-y-3.5">
+            <div className="p-4 sm:p-5 border-t border-stone-100 bg-stone-50/70 space-y-3.5 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center justify-between text-sm">
               <span className="font-semibold text-stone-600">Subtotal</span>
               <span className="font-extrabold text-stone-900 text-lg">
@@ -154,13 +154,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 px-4 rounded-xl border border-stone-300 text-stone-700 font-bold text-xs uppercase tracking-wider hover:bg-stone-100 transition-colors cursor-pointer"
+                className="flex-1 min-h-11 py-3 px-3 sm:px-4 rounded-xl border border-stone-300 text-stone-700 font-bold text-xs uppercase tracking-wider hover:bg-stone-100 transition-colors cursor-pointer"
               >
                 Add More Items
               </button>
               <button
                 onClick={onProceedToReview}
-                className="flex-1 py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+                className="flex-1 min-h-11 py-3 px-3 sm:px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/20 transition-all cursor-pointer"
               >
                 <span>Review Order</span>
                 <ArrowRight className="w-4 h-4" />
