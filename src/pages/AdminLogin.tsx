@@ -11,7 +11,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Default staff PIN is [REDACTED] (can be configured via env VITE_ADMIN_PIN)
   const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '[REDACTED]';
 
   const handleKeyClick = (digit: string) => {
@@ -150,7 +149,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
 
         <div className="text-center pt-1 border-t border-stone-800">
           <p className="text-[10px] text-stone-600 font-mono">
-            Default Demo PIN: <span className="text-stone-400 font-bold">{ADMIN_PIN}</span>
+            Authorized staff access only
           </p>
         </div>
       </div>
