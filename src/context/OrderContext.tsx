@@ -364,8 +364,11 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     let orderNumber: string;
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.rpc('next_order_number');
+      const { data, error } = await supabase.rpc('next_order_number', {});
       if (error || typeof data !== 'string') {
+        if (error?.code === 'PGRST202') {
+          throw new Error('Supabase is missing the next_order_number RPC in its API schema cache. Run the latest supabase_schema.sql in the Supabase SQL Editor, then retry.');
+        }
         throw new Error(`Could not allocate an order number: ${error?.message || 'invalid database response'}`);
       }
       orderNumber = data;

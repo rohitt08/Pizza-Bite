@@ -232,3 +232,6 @@ BEGIN
   END IF;
 END
 $$;
+
+-- Refresh PostgREST's function cache after all RPC functions and grants are installed.
+NOTIFY pgrst, 'reload schema';
