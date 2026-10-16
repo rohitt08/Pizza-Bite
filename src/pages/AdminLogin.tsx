@@ -60,7 +60,17 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
       if (refreshError) throw refreshError;
       onLoginSuccess();
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Staff sign-in failed. Please try again.');
+      const errorCode = typeof loginError === 'object' && loginError !== null && 'code' in loginError
+        ? String(loginError.code)
+        : '';
+      const errorMessage = loginError instanceof Error ? loginError.message : '';
+      if (errorCode === 'anonymous_provider_disabled') {
+        setError('Enable Anonymous Sign-Ins in Supabase Authentication settings, then try again.');
+      } else if (errorMessage.includes('Staff PIN hash is not configured')) {
+        setError('Staff PIN is not configured in Supabase Vault. Ask the project owner to set it up.');
+      } else {
+        setError(errorMessage || 'Staff sign-in failed. Please try again.');
+      }
       setPin('');
     } finally {
       setIsSubmitting(false);
