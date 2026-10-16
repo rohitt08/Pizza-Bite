@@ -105,6 +105,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Initialize orders from localStorage or start empty
   const [orders, setOrders] = useState<Order[]>(() => {
+    if (isSupabaseConfigured) return [];
     try {
       const saved = localStorage.getItem(ORDERS_STORAGE_KEY);
       if (saved) {
@@ -158,6 +159,14 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Sync orders to localStorage as local cache
   useEffect(() => {
+    if (isSupabaseConfigured) {
+      try {
+        localStorage.removeItem(ORDERS_STORAGE_KEY);
+      } catch {
+        // Storage can be disabled by the browser.
+      }
+      return;
+    }
     try {
       localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
     } catch {
@@ -187,6 +196,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!client) return;
     let isInitialSync = true;
     const realtimeChanges = new Map<string, Order | null>();
+    let channel: ReturnType<typeof client.channel> | null = null;
 
     // Load after the realtime subscription is active so changes are not missed.
     const fetchCloudOrders = async () => {
@@ -213,48 +223,68 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     };
 
-    // Realtime listener for cross-device orders
-    const channel = client
-      .channel('realtime_orders_channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newOrder = mapOrderRow(payload.new);
-            if (isInitialSync) realtimeChanges.set(newOrder.id, newOrder);
+    const connectStaffOrders = async () => {
+      const { data: isStaff, error } = await client.rpc('is_staff_session');
+      if (error || isStaff !== true) {
+        setOrders([]);
+        if (channel) {
+          void client.removeChannel(channel);
+          channel = null;
+        }
+        return;
+      }
+      if (channel) return;
 
-            setOrders((prev) => {
-              if (prev.some((o) => o.id === newOrder.id)) return prev;
-              return [newOrder, ...prev];
-            });
+      channel = client
+        .channel('realtime_orders_channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'orders' },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newOrder = mapOrderRow(payload.new);
+              if (isInitialSync) realtimeChanges.set(newOrder.id, newOrder);
 
-            // Chime for new incoming order
-            playChime(soundEnabled);
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedOrder = mapOrderRow(payload.new);
-            if (isInitialSync) realtimeChanges.set(updatedOrder.id, updatedOrder);
-            setOrders((prev) =>
-              prev.map((ord) =>
-                ord.id === updatedOrder.id ? updatedOrder : ord
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            const deletedRow = payload.old;
-            if (isInitialSync) realtimeChanges.set(deletedRow.id, null);
-            setOrders((prev) => prev.filter((ord) => ord.id !== deletedRow.id));
+              setOrders((prev) => {
+                if (prev.some((o) => o.id === newOrder.id)) return prev;
+                return [newOrder, ...prev];
+              });
+              playChime(soundEnabled);
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedOrder = mapOrderRow(payload.new);
+              if (isInitialSync) realtimeChanges.set(updatedOrder.id, updatedOrder);
+              setOrders((prev) => prev.map((ord) => ord.id === updatedOrder.id ? updatedOrder : ord));
+            } else if (payload.eventType === 'DELETE') {
+              const deletedRow = payload.old;
+              if (isInitialSync) realtimeChanges.set(deletedRow.id, null);
+              setOrders((prev) => prev.filter((ord) => ord.id !== deletedRow.id));
+            }
           }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') void fetchCloudOrders();
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error(`Supabase realtime subscription ${status.toLowerCase()}`);
+          }
+        });
+    };
+
+    void connectStaffOrders();
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setOrders([]);
+        if (channel) {
+          void client.removeChannel(channel);
+          channel = null;
         }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void fetchCloudOrders();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error(`Supabase realtime subscription ${status.toLowerCase()}`);
-        }
-      });
+      } else {
+        window.setTimeout(() => void connectStaffOrders(), 0);
+      }
+    });
 
     return () => {
-      client.removeChannel(channel);
+      subscription.unsubscribe();
+      if (channel) void client.removeChannel(channel);
     };
   }, [soundEnabled]);
 

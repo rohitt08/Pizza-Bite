@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, KeyRound, ArrowRight, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { isSupabaseConfigured, supabase } from '../utils/supabase';
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
@@ -10,8 +11,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '[REDACTED]';
 
   const handleKeyClick = (digit: string) => {
     if (pin.length < 6) {
@@ -30,24 +29,42 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     setError('');
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!pin) {
       setError('Please enter your staff PIN');
       return;
     }
 
+    if (!isSupabaseConfigured || !supabase) {
+      setError('Staff access is unavailable until Supabase is configured.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      if (pin === ADMIN_PIN) {
-        sessionStorage.setItem('pb_admin_auth', 'true');
-        onLoginSuccess();
-      } else {
-        setError('Incorrect PIN. Access restricted to staff only.');
-        setPin('');
+    setError('');
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session) {
+        const { error: authError } = await supabase.auth.signInAnonymously();
+        if (authError) throw authError;
       }
+
+      const { data, error: pinError } = await supabase.rpc('verify_staff_pin', { submitted_pin: pin });
+      if (pinError) throw pinError;
+      if (data !== true) {
+        throw new Error('Incorrect PIN. Access restricted to staff only.');
+      }
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) throw refreshError;
+      onLoginSuccess();
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : 'Staff sign-in failed. Please try again.');
+      setPin('');
+    } finally {
       setIsSubmitting(false);
-    }, 250);
+    }
   };
 
   return (

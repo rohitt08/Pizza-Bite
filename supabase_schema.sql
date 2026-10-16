@@ -50,40 +50,172 @@ AS $$
   SELECT 'PB-' || nextval('public.order_number_seq')::TEXT;
 $$;
 
+REVOKE ALL ON FUNCTION public.next_order_number() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.next_order_number() TO anon, authenticated;
+
+-- Staff PIN hashes and staff sessions are not exposed through the Data API.
+CREATE SCHEMA IF NOT EXISTS private;
+REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SCHEMA private TO authenticated;
+
+CREATE TABLE IF NOT EXISTS private.staff_sessions (
+  user_id UUID PRIMARY KEY,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+REVOKE ALL ON private.staff_sessions FROM PUBLIC, anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS private.staff_pin_attempts (
+  user_id UUID PRIMARY KEY,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ
+);
+REVOKE ALL ON private.staff_pin_attempts FROM PUBLIC, anon, authenticated;
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
+CREATE OR REPLACE FUNCTION private.is_staff_session()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM private.staff_sessions
+    WHERE user_id = (SELECT auth.uid())
+      AND expires_at > now()
+  );
+$$;
+
+REVOKE ALL ON FUNCTION private.is_staff_session() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.is_staff_session() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.is_staff_session()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT private.is_staff_session();
+$$;
+
+REVOKE ALL ON FUNCTION public.is_staff_session() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_staff_session() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.end_staff_session()
+RETURNS VOID
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  DELETE FROM private.staff_sessions WHERE user_id = (SELECT auth.uid());
+$$;
+
+REVOKE ALL ON FUNCTION public.end_staff_session() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.end_staff_session() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.verify_staff_pin(submitted_pin TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  pin_hash TEXT;
+  current_user_id UUID := auth.uid();
+  current_lock TIMESTAMPTZ;
+BEGIN
+  IF current_user_id IS NULL OR submitted_pin !~ '^[0-9]{4,6}$' THEN
+    RETURN FALSE;
+  END IF;
+
+  SELECT locked_until INTO current_lock
+  FROM private.staff_pin_attempts
+  WHERE user_id = current_user_id;
+
+  IF current_lock > now() THEN
+    RETURN FALSE;
+  END IF;
+
+  SELECT decrypted_secret INTO pin_hash
+  FROM vault.decrypted_secrets
+  WHERE name = 'pizza_bite_staff_pin_hash'
+  LIMIT 1;
+
+  IF pin_hash IS NULL THEN
+    RAISE EXCEPTION 'Staff PIN hash is not configured in Supabase Vault';
+  END IF;
+
+  IF extensions.crypt(submitted_pin, pin_hash) <> pin_hash THEN
+    INSERT INTO private.staff_pin_attempts (user_id, failed_attempts, locked_until)
+    VALUES (current_user_id, 1, NULL)
+    ON CONFLICT (user_id) DO UPDATE
+    SET failed_attempts = private.staff_pin_attempts.failed_attempts + 1,
+        locked_until = CASE
+          WHEN private.staff_pin_attempts.failed_attempts + 1 >= 5
+            THEN now() + interval '15 minutes'
+          ELSE private.staff_pin_attempts.locked_until
+        END;
+    RETURN FALSE;
+  END IF;
+
+  DELETE FROM private.staff_pin_attempts WHERE user_id = current_user_id;
+  INSERT INTO private.staff_sessions (user_id, expires_at)
+  VALUES (current_user_id, now() + interval '12 hours')
+  ON CONFLICT (user_id) DO UPDATE SET expires_at = EXCLUDED.expires_at;
+
+  RETURN TRUE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.verify_staff_pin(TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.verify_staff_pin(TEXT) TO authenticated;
 
 -- 2. Enable Row Level Security (RLS)
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders REPLICA IDENTITY FULL;
 
--- 3. Add permissive policies for the Food Stall model (Public Menu & Anonymous Order Creation)
--- Anyone can view orders (needed for real-time tracking)
-DROP POLICY IF EXISTS "Allow public read access to orders" ON public.orders;
-CREATE POLICY "Allow public read access to orders"
-ON public.orders FOR SELECT
-TO anon, authenticated
-USING (true);
+-- Remove legacy and custom permissive policies before applying the restricted set.
+DO $$
+DECLARE
+  existing_policy RECORD;
+BEGIN
+  FOR existing_policy IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'orders'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.orders', existing_policy.policyname);
+  END LOOP;
+END
+$$;
 
--- Anyone can insert orders (Customers placing orders from mobile)
-DROP POLICY IF EXISTS "Allow public insert to orders" ON public.orders;
-CREATE POLICY "Allow public insert to orders"
+REVOKE ALL ON public.orders FROM PUBLIC, anon, authenticated;
+GRANT INSERT ON public.orders TO anon, authenticated;
+GRANT SELECT, UPDATE, DELETE ON public.orders TO authenticated;
+
+CREATE POLICY "Customers can place new orders"
 ON public.orders FOR INSERT
 TO anon, authenticated
-WITH CHECK (true);
+WITH CHECK (status = 'NEW' AND completed_at IS NULL);
 
--- Allow updates (Staff POS accepting & completing orders)
-DROP POLICY IF EXISTS "Allow public update to orders" ON public.orders;
-CREATE POLICY "Allow public update to orders"
+CREATE POLICY "Staff can read orders"
+ON public.orders FOR SELECT
+TO authenticated
+USING (private.is_staff_session());
+
+CREATE POLICY "Staff can update orders"
 ON public.orders FOR UPDATE
-TO anon, authenticated
-USING (true)
-WITH CHECK (true);
+TO authenticated
+USING (private.is_staff_session())
+WITH CHECK (private.is_staff_session());
 
--- Allow the staff dashboard to delete individual orders and clear completed history.
-DROP POLICY IF EXISTS "Allow public delete from orders" ON public.orders;
-CREATE POLICY "Allow public delete from orders"
+CREATE POLICY "Staff can delete orders"
 ON public.orders FOR DELETE
-TO anon, authenticated
-USING (true);
+TO authenticated
+USING (private.is_staff_session());
 
 -- 4. Enable Realtime Replication for the orders table
 -- This allows instant cross-device WebSocket updates between customer and POS

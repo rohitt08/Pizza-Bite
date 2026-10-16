@@ -163,11 +163,22 @@ Pizza Bite/
 
 ## Supabase Setup
 
-Cross-device order sync requires a Supabase project. Run `supabase_schema.sql` in the project's SQL Editor, then add these frontend environment variables in `.env.local` for local development and in the hosting provider for every deployment:
+Cross-device order sync and protected staff access require a Supabase project. In the Supabase dashboard, enable **Anonymous Sign-Ins** under **Authentication → Sign In / Providers**. Run `supabase_schema.sql` in the project's SQL Editor, then add these frontend environment variables in `.env.local` for local development and in the hosting provider for every deployment:
 
 ```env
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<publishable-anon-key>
 ```
 
-Use the project's public anon/publishable key only; never put a service-role key in frontend variables. Redeploy after changing environment variables. The schema enables row-level policies and Realtime for `public.orders`, and provides a database sequence so order tokens remain unique across devices. If either credential is missing or still a template value, the app falls back to local storage and cannot synchronize separate devices.
+Use the project's public anon/publishable key only; never put a service-role key in frontend variables. Redeploy after changing environment variables.
+
+Set the staff PIN hash directly in the Supabase SQL Editor. Substitute the chosen PIN in place of `<staff-pin>` when running this command; do not add the PIN to frontend variables or commit it to the repository:
+
+```sql
+SELECT vault.create_secret(
+  extensions.crypt('<staff-pin>', extensions.gen_salt('bf')),
+  'pizza_bite_staff_pin_hash'
+);
+```
+
+The SQL schema stores only a bcrypt hash in Supabase Vault. Each staff login verifies the PIN server-side; a successful session lasts 12 hours, and five failed 4–6 digit PIN checks lock that anonymous user for 15 minutes. In Supabase Auth, enable CAPTCHA protection and configure the strictest suitable anonymous sign-up rate limits; per-user lockout alone cannot prevent attackers from creating new anonymous identities. The schema allows customers to insert new orders, while reads, updates, and deletes require a verified staff session. If the Supabase URL/key or Vault PIN hash is missing, staff access fails closed; the local-storage fallback is not suitable for production customer data. The previously configured PIN was committed in repository history, so revoke it and provision a different PIN before storing real customer data.
