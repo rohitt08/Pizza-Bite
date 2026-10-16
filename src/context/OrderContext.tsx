@@ -177,9 +177,9 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const { data, error } = await client
           .from('orders')
           .select('*')
-          .order('createdAt', { ascending: false });
+          .order('created_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
+          if (!error && data && data.length > 0) {
           const parsedOrders: Order[] = data.map((row: any) => ({
             id: row.id,
             orderNumber: row.order_number || row.orderNumber,
@@ -192,7 +192,12 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             createdAt: row.created_at || row.createdAt,
             completedAt: row.completed_at || row.completedAt || undefined,
           }));
-          setOrders(parsedOrders);
+          // Merge: cloud is source of truth, but keep any local-only orders not yet synced
+          setOrders((local) => {
+            const cloudIds = new Set(parsedOrders.map((o) => o.id));
+            const localOnly = local.filter((o) => !cloudIds.has(o.id));
+            return [...localOnly, ...parsedOrders];
+          });
         }
       } catch (err) {
         console.warn('Could not fetch from Supabase, using local fallback:', err);
